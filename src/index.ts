@@ -54,14 +54,17 @@ const endpoints = new Map<string, EndpointWrapper>();
 // Create endpoints with working directory
 for (const spacePath of config.spacePaths) {
   try {
-    const endpoint = await Promise.race([
+    const endpoint = await Promise.race<EndpointWrapper>([
       EndpointWrapper.createEndpoint(spacePath, workingDir),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error(`Connection timeout for ${spacePath}`)), 10000)
-      )
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error(`Connection timeout for ${spacePath}`)),
+          10000,
+        ),
+      ),
     ]);
-    
-    if (endpoint) {
+
+    if (endpoint && endpoint.toolDefinition) {
       endpoints.set(endpoint.toolDefinition().name, endpoint);
       console.error(`Successfully connected to ${spacePath}`);
     }
@@ -225,6 +228,20 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
  */
 async function main() {
   const transport = new StdioServerTransport();
+
+  // Handle process signals for clean shutdown
+  process.on("SIGINT", async () => {
+    console.error("Shutting down...");
+    await server.close();
+    process.exit(0);
+  });
+
+  process.on("SIGTERM", async () => {
+    console.error("Shutting down...");
+    await server.close();
+    process.exit(0);
+  });
+
   await server.connect(transport);
 }
 
