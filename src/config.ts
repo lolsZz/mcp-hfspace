@@ -17,7 +17,9 @@ export function parseConfig(): Config {
     boolean: ["desktop-mode", "debug"],
     default: {
       "desktop-mode": process.env.CLAUDE_DESKTOP_MODE !== "false",
-      "work-dir": process.env.MCP_HF_WORK_DIR || process.cwd(),
+      "work-dir":
+        process.env.MCP_HF_WORK_DIR ||
+        path.join(process.env.HOME || process.cwd(), ".mcp-store"),
       "hf-token": process.env.HF_TOKEN,
       debug: false,
     },
@@ -30,8 +32,10 @@ export function parseConfig(): Config {
     hfToken: argv["hf-token"],
     debug: argv["debug"],
     spacePaths: (() => {
-      const filtered = argv._.filter((arg) => arg.toString().trim().length > 0);
+      const filtered = argv._.filter(
+        (arg: string | number) => arg.toString().trim().length > 0,
+      );
       return filtered.length > 0 ? filtered : ["evalstate/FLUX.1-schnell"];
-    })(),
+    })().map((space: string) => space.trim()),
   };
 }

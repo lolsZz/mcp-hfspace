@@ -3,10 +3,10 @@
 const AVAILABLE_RESOURCES = "Available Resources";
 const AVAILABLE_FILES = "available-files";
 
+import { promises as fs } from "fs";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { VERSION } from "./version.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-// Remove mime import and treatAsText import as they're now handled in WorkingDirectory
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -39,7 +39,8 @@ const server = new Server(
 // Parse configuration
 const config = parseConfig();
 
-// Change to configured working directory
+// Ensure working directory exists and change to it
+await fs.mkdir(config.workDir, { recursive: true });
 process.chdir(config.workDir);
 
 const workingDir = new WorkingDirectory(
@@ -53,11 +54,17 @@ const endpoints = new Map<string, EndpointWrapper>();
 // Create endpoints with working directory
 for (const spacePath of config.spacePaths) {
   try {
-    const endpoint = await EndpointWrapper.createEndpoint(
-      spacePath,
-      workingDir,
-    );
-    endpoints.set(endpoint.toolDefinition().name, endpoint);
+    const endpoint = await Promise.race([
+      EndpointWrapper.createEndpoint(spacePath, workingDir),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error(`Connection timeout for ${spacePath}`)), 10000)
+      )
+    ]);
+    
+    if (endpoint) {
+      endpoints.set(endpoint.toolDefinition().name, endpoint);
+      console.error(`Successfully connected to ${spacePath}`);
+    }
   } catch (e) {
     if (e instanceof Error) {
       console.error(`Error loading ${spacePath}: ${e.message}`);
